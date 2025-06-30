@@ -1,5 +1,7 @@
 ---
 title: "About"
 ---
+## About me
 
-About this site
+My name is **rishi bethina** and I go to *jerome High school*
+[Kane's Free Data Science Bootcamp](https://bootcamp.davidkane.info)
