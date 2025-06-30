@@ -1,0 +1,136 @@
+---
+title: "Billboard Graphic"
+execute: 
+  echo: false
+---
+---
+
+
+```{r setup}
+#| include: false
+# Load required libraries
+library(tidyr)
+library(ggplot2)
+library(dplyr)
+```
+
+```{r data-prep}
+# Load the billboard dataset
+data("billboard")
+
+# The billboard dataset contains song rankings over weeks
+# Let's create a visualization showing how songs move through the charts over time
+
+# Prepare the data: pivot longer to get week and rank in separate columns
+billboard_long <- billboard %>%
+  pivot_longer(
+    cols = starts_with("wk"),
+    names_to = "week",
+    values_to = "rank",
+    names_prefix = "wk"
+  ) %>%
+  mutate(
+    week = as.numeric(week),
+    rank = as.numeric(rank)
+  ) %>%
+  filter(!is.na(rank)) %>%
+  # Focus on songs that had some chart success (reached top 20 at some point)
+  group_by(track) %>%
+  filter(min(rank, na.rm = TRUE) <= 20) %>%
+  ungroup()
+
+# Create a selection of notable songs for clarity
+top_songs <- billboard_long %>%
+  group_by(artist, track) %>%
+  summarise(
+    peak_rank = min(rank, na.rm = TRUE),
+    weeks_on_chart = n(),
+    .groups = "drop"
+  ) %>%
+  filter(peak_rank <= 10, weeks_on_chart >= 15) %>%
+  arrange(peak_rank) %>%
+  head(8)  # Top 8 songs for visual clarity
+
+# Filter data for these top songs
+plot_data <- billboard_long %>%
+  semi_join(top_songs, by = c("artist", "track")) %>%
+  mutate(
+    song_label = paste0(artist, " - ", track),
+    song_label = case_when(
+      nchar(song_label) > 35 ~ paste0(substr(song_label, 1, 32), "..."),
+      TRUE ~ song_label
+    )
+  )
+```
+
+```{r visualization}
+#| fig-width: 12
+#| fig-height: 8
+
+# Create the visualization
+cool_plot <- ggplot(plot_data, aes(x = week, y = rank, color = song_label)) +
+  # Add lines showing chart trajectory
+  geom_line(linewidth = 1.2, alpha = 0.8) +
+  # Add points to emphasize data points
+  geom_point(size = 1.5, alpha = 0.7) +
+  # Flip y-axis so rank 1 is at the top
+  scale_y_reverse(
+    breaks = c(1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100),
+    limits = c(100, 1)
+  ) +
+  # Set x-axis
+  scale_x_continuous(
+    breaks = seq(0, 75, 10),
+    limits = c(1, 75)
+  ) +
+  # Use a vibrant color palette
+  scale_color_viridis_d(option = "plasma", name = "Song") +
+  # Add styling
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5, color = "gray60"),
+    legend.position = "right",
+    legend.text = element_text(size = 9),
+    legend.title = element_text(size = 10, face = "bold"),
+    panel.grid.major = element_line(color = "gray90", linewidth = 0.5),
+    panel.grid.minor = element_line(color = "gray95", linewidth = 0.3),
+    axis.title = element_text(size = 12, face = "bold"),
+    axis.text = element_text(size = 10),
+    plot.background = element_rect(fill = "#fafafa", color = NA),
+    panel.background = element_rect(fill = "white", color = NA)
+  ) +
+  labs(
+    title = "Billboard Hot 100: Chart Trajectories of Hit Songs",
+    subtitle = "How top songs moved through the charts over time (2000 data)",
+    x = "Weeks on Chart",
+    y = "Billboard Rank",
+    caption = "Data: Billboard Hot 100 chart positions | Lower rank number = higher chart position"
+  ) +
+  # Add annotation explaining the inverted y-axis
+  annotate("text", x = 65, y = 5, label = "← Better", 
+           size = 3, color = "gray50", fontface = "italic") +
+  annotate("text", x = 65, y = 95, label = "← Worse", 
+           size = 3, color = "gray50", fontface = "italic")
+
+# Display the plot
+cool_plot
+```
+
+```{r summary-table}
+# Show summary statistics
+performance_summary <- plot_data %>%
+  group_by(song_label) %>%
+  summarise(
+    peak_position = min(rank),
+    weeks_charted = max(week),
+    .groups = "drop"
+  ) %>%
+  arrange(peak_position)
+
+knitr::kable(performance_summary, 
+             col.names = c("Song", "Peak Position", "Weeks on Chart"),
+             caption = "Performance Summary of Featured Songs")
+```
+
+
